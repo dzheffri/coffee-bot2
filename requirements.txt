@@ -1,4 +1,4 @@
 aiogram
 qrcode
-opencv-python
+opencv-python-headless
 psycopg[binary]
