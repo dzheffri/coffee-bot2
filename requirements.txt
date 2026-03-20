@@ -2,3 +2,4 @@ aiogram
 qrcode
 opencv-python-headless
 psycopg[binary]
+Pillow
