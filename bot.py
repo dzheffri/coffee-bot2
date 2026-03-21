@@ -63,7 +63,6 @@ async def on_startup(bot: Bot):
         raise RuntimeError("Не задана змінна WEBHOOK_BASE_URL")
 
     await set_commands()
-
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(
         url=WEBHOOK_URL,
@@ -73,24 +72,18 @@ async def on_startup(bot: Bot):
     print(f"✅ Webhook встановлено: {WEBHOOK_URL}")
 
 
-async def on_shutdown(bot: Bot):
-    print("⛔ Бот завершує роботу")
-    await bot.session.close()
-
-
 dp.startup.register(on_startup)
-dp.shutdown.register(on_shutdown)
 
 
-def healthcheck(request):
-    return web.Response(text="OK")
+def root_healthcheck(request):
+    return web.Response(text="OK", status=200)
 
 
 def main():
     app = web.Application()
 
-    app.router.add_get("/", healthcheck)
-    app.router.add_get("/health", healthcheck)
+    app.router.add_get("/", root_healthcheck)
+    app.router.add_get("/health", root_healthcheck)
 
     SimpleRequestHandler(
         dispatcher=dp,
@@ -101,7 +94,7 @@ def main():
     setup_application(app, dp, bot=bot)
 
     print(f"🌐 HTTP server start on {HOST}:{PORT}")
-    web.run_app(app, host=HOST, port=PORT)
+    web.run_app(app, host=HOST, port=PORT, print=None)
 
 
 if __name__ == "__main__":
