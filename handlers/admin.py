@@ -55,26 +55,26 @@ def extract_target_user_id(message: types.Message):
 
 
 def register(dp, bot):
-    @dp.message(lambda message: message.text == "📷 Сканувати QR")
+    @dp.message(lambda message: message.text == "📷 Режим: нарахування")
     async def scan_qr_button(message: types.Message):
         if not is_staff(message.from_user.id):
             return
 
         admin_modes[message.from_user.id] = "scan"
         await message.answer(
-            "📷 Режим: нарахування чашки\n\n"
-            "Надішли фото QR-коду клієнта"
+            "📷 Режим: нарахування чашки увімкнено\n\n"
+            "Тепер натисни «📱 Відкрити сканер» або надішли фото QR-коду"
         )
 
-    @dp.message(lambda message: message.text == "✅ Списати безкоштовну каву")
+    @dp.message(lambda message: message.text == "✅ Режим: списання")
     async def redeem_free_coffee_button(message: types.Message):
         if not is_staff(message.from_user.id):
             return
 
         admin_modes[message.from_user.id] = "redeem"
         await message.answer(
-            "✅ Режим: списання безкоштовної кави\n\n"
-            "Надішли фото QR-коду клієнта"
+            "✅ Режим: списання безкоштовної кави увімкнено\n\n"
+            "Тепер натисни «📱 Відкрити сканер» або надішли фото QR-коду"
         )
 
     @dp.message(lambda message: message.text == "📊 Статистика")
@@ -236,6 +236,98 @@ def register(dp, bot):
             f"❌ Не вдалося відправити: {failed_count}"
         )
 
+    @dp.message(lambda message: message.web_app_data is not None)
+    async def handle_webapp_qr(message: types.Message):
+        if not is_staff(message.from_user.id):
+            return
+
+        mode = admin_modes.get(message.from_user.id)
+
+        if mode not in ["scan", "redeem"]:
+            await message.answer(
+                "Оберіть дію перед скануванням:\n"
+                "📷 Режим: нарахування — щоб нарахувати чашку\n"
+                "✅ Режим: списання — щоб списати бонус"
+            )
+            return
+
+        data = message.web_app_data.data
+
+        if not data:
+            await message.answer("❌ Дані зі сканера не отримано")
+            return
+
+        if not data.startswith("coffee:"):
+            await message.answer("❌ Це не QR-код нашого бота")
+            return
+
+        token = data.split("coffee:")[1]
+
+        user_id = get_user_by_token(token)
+        if not user_id:
+            await message.answer("❌ Користувача не знайдено")
+            return
+
+        if mode == "scan":
+            add_cup_by_token(token)
+            cups = get_cups_by_token(token)
+
+            if cups >= 7:
+                award_free_coffee(user_id)
+                free_balance = get_free_coffee_balance_by_token(token)
+
+                await message.answer(
+                    "🎉 7/7! Клієнту нараховано безкоштовну каву\n"
+                    f"🎁 Зараз безкоштовних кав на балансі: {free_balance}"
+                )
+
+                try:
+                    await bot.send_message(
+                        user_id,
+                        "🎉 Вітаємо!\n"
+                        "Ти зібрав 7 чашок і отримав безкоштовну каву ☕\n\n"
+                        f"🎁 Безкоштовних кав на балансі: {free_balance}"
+                    )
+                except:
+                    pass
+            else:
+                await message.answer(f"✅ Нараховано чашку: {cups}/7 ☕")
+
+                try:
+                    await bot.send_message(
+                        user_id,
+                        f"☕ Тобі додали чашку.\nЗараз у тебе: {cups}/7"
+                    )
+                except:
+                    pass
+
+        elif mode == "redeem":
+            result = redeem_free_coffee_by_token(token)
+
+            if result == "NOT_FOUND":
+                await message.answer("❌ Користувача не знайдено")
+                return
+
+            if result == "EMPTY":
+                await message.answer("❌ У клієнта немає безкоштовної кави для списання")
+                return
+
+            free_balance = get_free_coffee_balance_by_token(token)
+
+            await message.answer(
+                "✅ Безкоштовну каву списано\n"
+                f"🎁 Залишок безкоштовних кав: {free_balance}"
+            )
+
+            try:
+                await bot.send_message(
+                    user_id,
+                    "✅ У тебе списали 1 безкоштовну каву\n"
+                    f"🎁 Залишок на балансі: {free_balance}"
+                )
+            except:
+                pass
+
     @dp.message(lambda message: message.photo)
     async def handle_qr_photo(message: types.Message):
         if not is_staff(message.from_user.id):
@@ -245,8 +337,8 @@ def register(dp, bot):
         if mode not in ["scan", "redeem"]:
             await message.answer(
                 "Оберіть дію перед скануванням:\n"
-                "📷 Сканувати QR — щоб нарахувати чашку\n"
-                "✅ Списати безкоштовну каву — щоб списати бонус"
+                "📷 Режим: нарахування — щоб нарахувати чашку\n"
+                "✅ Режим: списання — щоб списати бонус"
             )
             return
 
