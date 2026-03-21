@@ -1,25 +1,21 @@
-import os
 import asyncio
-from aiohttp import web
+import logging
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import BotCommand
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from config import TOKEN, SUPER_ADMIN_IDS
 from keyboards import get_keyboard
 from db import is_admin
 from handlers import user, admin
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+
 BOT_TOKEN = TOKEN
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_SECRET = "for_you_me_secret_2026"
-
-WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "").rstrip("/")
-WEBHOOK_URL = f"{WEBHOOK_BASE_URL}{WEBHOOK_PATH}" if WEBHOOK_BASE_URL else ""
-
-PORT = int(os.getenv("PORT", 8080))
-HOST = "0.0.0.0"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -46,8 +42,8 @@ async def start_handler(message: types.Message):
             "За кожні 7 чашок ти отримуєш безкоштовну каву 🎁",
             reply_markup=keyboard
         )
-    except Exception as e:
-        print("START ERROR:", e)
+    except Exception:
+        logging.exception("START ERROR")
         await message.answer("❌ Сталася помилка при відкритті меню.")
 
 
@@ -57,55 +53,17 @@ async def set_commands():
     ])
 
 
-async def on_startup(bot: Bot):
-    print("🚀 Бот запускається у режимі WEBHOOK")
+async def main():
+    logging.info("🚀 Бот запускається у режимі POLLING")
 
-    if not WEBHOOK_BASE_URL:
-        raise RuntimeError("Не задана змінна WEBHOOK_BASE_URL")
-
+    await bot.delete_webhook(drop_pending_updates=False)
     await set_commands()
-    await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(
-        url=WEBHOOK_URL,
-        secret_token=WEBHOOK_SECRET
-    )
 
-    print(f"✅ Webhook встановлено: {WEBHOOK_URL}")
-
-
-dp.startup.register(on_startup)
-
-
-def root_healthcheck(request):
-    return web.Response(text="OK", status=200)
-
-
-async def start():
-    app = web.Application()
-
-    app.router.add_get("/", root_healthcheck)
-    app.router.add_get("/health", root_healthcheck)
-
-    SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-        secret_token=WEBHOOK_SECRET,
-    ).register(app, path=WEBHOOK_PATH)
-
-    setup_application(app, dp, bot=bot)
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-
-    site = web.TCPSite(runner, HOST, PORT)
-    await site.start()
-
-    print(f"🌐 HTTP server start on {HOST}:{PORT}")
-
-    # держим процесс живым
-    while True:
-        await asyncio.sleep(3600)
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        await bot.session.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(start())
+    asyncio.run(main())
