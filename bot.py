@@ -39,6 +39,11 @@ async def start_handler(message: types.Message):
 
 async def main():
     print("Бот запущено!")
+
+    # 💥 КРИТИЧЕСКИЙ ФИКС КОНФЛИКТА
+    await bot.delete_webhook(drop_pending_updates=True)
+
+    # 🔁 запускаем polling
     await dp.start_polling(bot)
 
 
