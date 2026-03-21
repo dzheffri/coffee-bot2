@@ -11,7 +11,6 @@ def get_connection():
 def init_db():
     with get_connection() as conn:
         with conn.cursor() as cursor:
-            # таблиця користувачів
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
@@ -25,14 +24,12 @@ def init_db():
             )
             """)
 
-            # таблиця адміністраторів
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS admins (
                 user_id BIGINT PRIMARY KEY
             )
             """)
 
-            # на випадок, якщо таблиця вже існувала в старішій версії
             cursor.execute("""
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS total_scans INTEGER DEFAULT 0
@@ -147,6 +144,52 @@ def add_cup_by_token(token: str):
                 total_scans = total_scans + 1
             WHERE qr_token = %s
             """, (token,))
+
+
+def add_cups_by_token(token: str, count: int):
+    if count <= 0:
+        raise ValueError("count must be > 0")
+
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+            SELECT user_id, cups, free_coffee_balance
+            FROM users
+            WHERE qr_token = %s
+            """, (token,))
+            row = cursor.fetchone()
+
+            if not row:
+                return None
+
+            user_id, current_cups, current_free_balance = row
+
+            total_cups = current_cups + count
+            earned_free = total_cups // 7
+            remaining_cups = total_cups % 7
+            new_free_balance = current_free_balance + earned_free
+
+            cursor.execute("""
+            UPDATE users
+            SET cups = %s,
+                total_scans = total_scans + %s,
+                free_coffee_balance = free_coffee_balance + %s,
+                total_free_coffee_earned = total_free_coffee_earned + %s
+            WHERE qr_token = %s
+            """, (
+                remaining_cups,
+                count,
+                earned_free,
+                earned_free,
+                token
+            ))
+
+            return {
+                "user_id": user_id,
+                "cups": remaining_cups,
+                "earned_free": earned_free,
+                "free_balance": new_free_balance
+            }
 
 
 def award_free_coffee(user_id: int):
