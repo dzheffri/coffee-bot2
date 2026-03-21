@@ -1,4 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 
 def get_keyboard(user_id, super_admin_ids, is_admin=False):
@@ -14,10 +14,19 @@ def get_keyboard(user_id, super_admin_ids, is_admin=False):
 
     if is_admin or user_id in super_admin_ids:
         keyboard.append([
-            KeyboardButton(text="📷 Сканувати QR"),
-            KeyboardButton(text="✅ Списати безкоштовну каву")
+            KeyboardButton(text="📷 Режим: нарахування"),
+            KeyboardButton(text="✅ Режим: списання")
         ])
         keyboard.append([
+            KeyboardButton(
+                text="📱 Відкрити сканер",
+                web_app=WebAppInfo(
+                    url="https://dzheffri.github.io/coffee-bot2/scanner.html"
+                )
+            )
+        ])
+        keyboard.append([
+            KeyboardButton(text="📷 Сканувати QR (фото)"),
             KeyboardButton(text="📊 Статистика")
         ])
 
