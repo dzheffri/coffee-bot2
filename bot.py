@@ -56,7 +56,7 @@ async def set_commands():
 async def main():
     logging.info("🚀 Бот запускається у режимі POLLING")
 
-    await bot.delete_webhook(drop_pending_updates=False)
+    await bot.delete_webhook(drop_pending_updates=True)
     await set_commands()
 
     try:
