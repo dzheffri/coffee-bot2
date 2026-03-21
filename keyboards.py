@@ -2,9 +2,17 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 
 def get_keyboard(user_id, super_admin_ids, is_admin=False):
-    keyboard = []
+    keyboard = [
+        [
+            KeyboardButton(text="📱 Мій QR-код"),
+            KeyboardButton(text="☕ Мої чашки")
+        ],
+        [
+            KeyboardButton(text="🎁 Мої безкоштовні кави")
+        ]
+    ]
 
-    # Обычному пользователю клавиатуру вообще не показываем
+    # Кнопки для админа и супер-админа
     if is_admin or user_id in super_admin_ids:
         keyboard.append([
             KeyboardButton(text="📷 Режим: нарахування"),
