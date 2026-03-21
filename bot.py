@@ -27,7 +27,6 @@ user.register(dp)
 admin.register(dp, bot)
 
 
-# 👇 СТАРТ
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     try:
@@ -51,14 +50,12 @@ async def start_handler(message: types.Message):
         await message.answer("❌ Сталася помилка при відкритті меню.")
 
 
-# 👇 команды
 async def set_commands():
     await bot.set_my_commands([
         BotCommand(command="start", description="Запуск бота")
     ])
 
 
-# 👇 ВАЖНО — WEBHOOK СТАРТ
 async def on_startup(bot: Bot):
     print("🚀 Бот запускається у режимі WEBHOOK")
 
@@ -76,30 +73,25 @@ async def on_startup(bot: Bot):
     print(f"✅ Webhook встановлено: {WEBHOOK_URL}")
 
 
-# 👇 ОСТАНОВКА
 async def on_shutdown(bot: Bot):
     print("⛔ Бот завершує роботу")
-    await bot.delete_webhook()
+    await bot.session.close()
 
 
 dp.startup.register(on_startup)
 dp.shutdown.register(on_shutdown)
 
 
-# 🔥 ВОТ ЭТО ФИКС (НЕ async)
 def healthcheck(request):
     return web.Response(text="OK")
 
 
-# 👇 ОСНОВНОЙ ЗАПУСК
 def main():
     app = web.Application()
 
-    # healthcheck для Railway
     app.router.add_get("/", healthcheck)
     app.router.add_get("/health", healthcheck)
 
-    # webhook endpoint
     SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
