@@ -1,4 +1,5 @@
 import os
+import asyncio
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -79,7 +80,7 @@ def root_healthcheck(request):
     return web.Response(text="OK", status=200)
 
 
-def main():
+async def start():
     app = web.Application()
 
     app.router.add_get("/", root_healthcheck)
@@ -93,9 +94,18 @@ def main():
 
     setup_application(app, dp, bot=bot)
 
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    site = web.TCPSite(runner, HOST, PORT)
+    await site.start()
+
     print(f"🌐 HTTP server start on {HOST}:{PORT}")
-    web.run_app(app, host=HOST, port=PORT, print=None)
+
+    # держим процесс живым
+    while True:
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(start())
