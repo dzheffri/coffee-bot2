@@ -2,36 +2,42 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 
 def get_keyboard(user_id, super_admin_ids, is_admin=False):
+    is_super_admin = user_id in super_admin_ids
+
+    # Обычный пользователь
+    if not is_admin and not is_super_admin:
+        keyboard = [
+            [
+                KeyboardButton(text="📱 Мій QR-код"),
+                KeyboardButton(text="☕ Мої чашки")
+            ],
+            [
+                KeyboardButton(text="🎁 Мої безкоштовні кави")
+            ]
+        ]
+        return ReplyKeyboardMarkup(
+            keyboard=keyboard,
+            resize_keyboard=True
+        )
+
+    # Обычный админ и супер-админ
     keyboard = [
         [
-            KeyboardButton(text="📱 Мій QR-код"),
-            KeyboardButton(text="☕ Мої чашки")
-        ],
-        [
-            KeyboardButton(text="🎁 Мої безкоштовні кави")
-        ]
-    ]
-
-    # Кнопки для админа и супер-админа
-    if is_admin or user_id in super_admin_ids:
-        keyboard.append([
             KeyboardButton(text="📷 Режим: нарахування"),
             KeyboardButton(text="✅ Режим: списання")
-        ])
-        keyboard.append([
+        ],
+        [
             KeyboardButton(
                 text="📱 Відкрити сканер",
                 web_app=WebAppInfo(
                     url="https://dzheffri.github.io/coffee-bot2/scanner.html"
                 )
             )
-        ])
-        keyboard.append([
-            KeyboardButton(text="📷 Сканувати QR (фото)")
-        ])
+        ]
+    ]
 
-    # Только для супер-админа
-    if user_id in super_admin_ids:
+    # Только супер-админ
+    if is_super_admin:
         keyboard.append([
             KeyboardButton(text="📊 Статистика")
         ])
