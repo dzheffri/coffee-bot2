@@ -2,55 +2,80 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Сканування QR</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #ffffff;
+      --text: #1f1f1f;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --danger: #dc2626;
+      --success: #16a34a;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     body {
       margin: 0;
-      padding: 20px;
       font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       text-align: center;
-      background: #f7f7f7;
-      color: #222;
+      padding: 20px;
     }
 
     h1 {
-      font-size: 24px;
-      margin-bottom: 10px;
+      font-size: 28px;
+      margin: 10px 0 10px;
     }
 
     p {
-      margin-bottom: 20px;
-      color: #555;
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .card {
+      max-width: 420px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 12px;
+      overflow: hidden;
     }
 
     #reader {
-      width: 320px;
-      max-width: 100%;
-      margin: 0 auto 20px auto;
-      background: white;
-      border-radius: 12px;
-      padding: 10px;
-      box-sizing: border-box;
+      width: 100%;
+      min-height: 320px;
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
     }
 
     #status {
-      margin-top: 15px;
-      font-size: 16px;
+      margin-top: 16px;
+      font-size: 17px;
       min-height: 24px;
+      font-weight: 600;
     }
 
     .ok {
-      color: green;
+      color: var(--success);
       font-weight: bold;
     }
 
     .err {
-      color: crimson;
+      color: var(--danger);
       font-weight: bold;
     }
 
@@ -58,66 +83,241 @@
       font-size: 14px;
       color: #777;
       margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    .actions {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Прячем стандартный лишний UI html5-qrcode */
+    #reader__dashboard_section_csr,
+    #reader__dashboard_section_swaplink,
+    #reader__scan_region img,
+    #reader__camera_selection {
+      display: none !important;
+    }
+
+    #reader__dashboard {
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+    }
+
+    #reader__scan_region {
+      min-height: 320px !important;
+    }
+
+    video {
+      border-radius: 14px;
+      object-fit: cover !important;
     }
   </style>
 </head>
 <body>
   <h1>📷 Сканування QR</h1>
-  <p>Наведіть камеру на QR-код клієнта</p>
+  <p>Наведи камеру на QR-код клієнта</p>
 
-  <div id="reader"></div>
-  <div id="status">Очікуємо запуск камери...</div>
-  <div class="hint">Після успішного сканування дані автоматично підуть у бота</div>
+  <div class="card">
+    <div id="reader"></div>
+  </div>
+
+  <div id="status">Запускаємо камеру...</div>
+  <div class="hint" id="hint">
+    Після успішного сканування дані автоматично підуть у бота
+  </div>
+
+  <div class="actions">
+    <button id="retryBtn" class="btn-primary hidden">Спробувати ще раз</button>
+    <button id="closeBtn" class="btn-danger">Закрити</button>
+  </div>
 
   <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
 
+    const statusEl = document.getElementById("status");
+    const hintEl = document.getElementById("hint");
+    const retryBtn = document.getElementById("retryBtn");
+    const closeBtn = document.getElementById("closeBtn");
+
+    let qrScanner = null;
+    let scannerStarted = false;
     let alreadyScanned = false;
+    let isSending = false;
 
     function setStatus(text, className = "") {
-      const status = document.getElementById("status");
-      status.textContent = text;
-      status.className = className;
+      statusEl.textContent = text;
+      statusEl.className = className;
     }
 
-    function onScanSuccess(decodedText) {
-      if (alreadyScanned) return;
-      alreadyScanned = true;
+    function showRecoveryButtons() {
+      retryBtn.classList.remove("hidden");
+    }
+
+    function hideRecoveryButtons() {
+      retryBtn.classList.add("hidden");
+    }
+
+    async function stopScanner() {
+      if (!qrScanner || !scannerStarted) return;
+
+      try {
+        await qrScanner.stop();
+      } catch (_) {}
+
+      try {
+        await qrScanner.clear();
+      } catch (_) {}
+
+      scannerStarted = false;
+    }
+
+    function qrboxSize(viewfinderWidth, viewfinderHeight) {
+      const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.75;
+      return {
+        width: Math.floor(size),
+        height: Math.floor(size)
+      };
+    }
+
+    async function sendResultToBot(decodedText) {
+      if (isSending) return;
+      isSending = true;
 
       if (!decodedText.startsWith("coffee:")) {
         setStatus("❌ Це не QR-код бота", "err");
+        hintEl.textContent = "Спробуй відсканувати правильний QR-код клієнта";
         alreadyScanned = false;
+        isSending = false;
         return;
       }
 
-      setStatus("✅ QR успішно зчитано. Відправляємо в бота...", "ok");
-
       try {
+        setStatus("✅ QR успішно зчитано. Відправляємо в бота...", "ok");
+        hintEl.textContent = "Дані передаються у Telegram...";
+        await stopScanner();
+
         tg.sendData(decodedText);
+
+        setTimeout(() => {
+          tg.close();
+        }, 250);
       } catch (e) {
+        console.error("sendResultToBot error:", e);
         setStatus("❌ Помилка відправки даних у Telegram", "err");
-        console.error(e);
+        hintEl.textContent = "Спробуй ще раз";
         alreadyScanned = false;
+        isSending = false;
+        showRecoveryButtons();
       }
     }
 
-    function onScanFailure(error) {
-      // Ничего не делаем, чтобы не спамить ошибками
+    async function onScanSuccess(decodedText) {
+      if (alreadyScanned) return;
+      alreadyScanned = true;
+      await sendResultToBot(decodedText);
     }
 
-    const html5QrCodeScanner = new Html5QrcodeScanner(
-      "reader",
-      {
-        fps: 10,
-        qrbox: { width: 220, height: 220 },
-        rememberLastUsedCamera: true
-      },
-      false
-    );
+    function onScanFailure(_) {
+      // нічого не робимо, щоб не спамити помилками
+    }
 
-    html5QrCodeScanner.render(onScanSuccess, onScanFailure);
+    async function startScanner() {
+      hideRecoveryButtons();
+      alreadyScanned = false;
+      isSending = false;
+      setStatus("Запускаємо камеру...");
+      hintEl.textContent = "Після успішного сканування дані автоматично підуть у бота";
+
+      try {
+        if (qrScanner) {
+          try {
+            await qrScanner.clear();
+          } catch (_) {}
+        }
+
+        qrScanner = new Html5Qrcode("reader");
+
+        const config = {
+          fps: 10,
+          qrbox: qrboxSize,
+          aspectRatio: 1.0,
+          disableFlip: false,
+          rememberLastUsedCamera: true
+        };
+
+        try {
+          await qrScanner.start(
+            { facingMode: { exact: "environment" } },
+            config,
+            onScanSuccess,
+            onScanFailure
+          );
+        } catch (firstError) {
+          console.warn("Exact back camera failed, fallback:", firstError);
+
+          await qrScanner.start(
+            { facingMode: "environment" },
+            config,
+            onScanSuccess,
+            onScanFailure
+          );
+        }
+
+        scannerStarted = true;
+        setStatus("Наведи камеру на QR-код");
+      } catch (error) {
+        console.error("Camera start failed:", error);
+        setStatus("❌ Не вдалося відкрити камеру", "err");
+        hintEl.textContent =
+          "Дозволь доступ до камери та спробуй ще раз.";
+        showRecoveryButtons();
+      }
+    }
+
+    retryBtn.addEventListener("click", async () => {
+      await startScanner();
+    });
+
+    closeBtn.addEventListener("click", async () => {
+      await stopScanner();
+      tg.close();
+    });
+
+    window.addEventListener("beforeunload", async () => {
+      await stopScanner();
+    });
+
+    startScanner();
   </script>
 </body>
 </html>
