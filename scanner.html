@@ -15,8 +15,12 @@
       --text: #1f1f1f;
       --muted: #6b7280;
       --border: #e5e7eb;
+      --accent: #2563eb;
       --danger: #dc2626;
       --success: #16a34a;
+      --scan-line: rgba(37, 99, 235, 0.95);
+      --scan-frame: rgba(37, 99, 235, 0.75);
+      --scan-frame-success: rgba(22, 163, 74, 0.95);
     }
 
     * {
@@ -35,16 +39,17 @@
 
     h1 {
       font-size: 28px;
-      margin: 10px 0 10px;
+      margin: 10px 0;
     }
 
     p {
-      margin: 0 0 18px;
       color: var(--muted);
+      margin: 0 0 18px;
       font-size: 16px;
     }
 
     .card {
+      position: relative;
       max-width: 420px;
       margin: 0 auto;
       background: var(--card);
@@ -55,28 +60,121 @@
     }
 
     #reader {
+      position: relative;
       width: 100%;
       min-height: 320px;
-      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .scan-overlay {
+      position: absolute;
+      inset: 12px;
+      pointer-events: none;
+      z-index: 5;
       border-radius: 14px;
       overflow: hidden;
     }
 
+    .scan-frame {
+      position: absolute;
+      inset: 12%;
+      border: 3px solid var(--scan-frame);
+      border-radius: 18px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.16);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .scan-frame.success {
+      border-color: var(--scan-frame-success);
+      box-shadow:
+        0 0 0 9999px rgba(0, 0, 0, 0.10),
+        0 0 0 4px rgba(22, 163, 74, 0.12);
+      transform: scale(1.02);
+    }
+
+    .scan-corner {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border-color: #fff;
+      border-style: solid;
+      z-index: 6;
+    }
+
+    .scan-corner.tl {
+      top: 12%;
+      left: 12%;
+      border-width: 4px 0 0 4px;
+      border-top-left-radius: 8px;
+    }
+
+    .scan-corner.tr {
+      top: 12%;
+      right: 12%;
+      border-width: 4px 4px 0 0;
+      border-top-right-radius: 8px;
+    }
+
+    .scan-corner.bl {
+      bottom: 12%;
+      left: 12%;
+      border-width: 0 0 4px 4px;
+      border-bottom-left-radius: 8px;
+    }
+
+    .scan-corner.br {
+      bottom: 12%;
+      right: 12%;
+      border-width: 0 4px 4px 0;
+      border-bottom-right-radius: 8px;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 14%;
+      right: 14%;
+      top: 18%;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, var(--scan-line), transparent);
+      box-shadow: 0 0 12px rgba(37, 99, 235, 0.8);
+      animation: scanMove 2s linear infinite;
+      z-index: 6;
+      transition: opacity 0.2s ease;
+    }
+
+    .scan-line.hidden {
+      opacity: 0;
+      animation: none;
+    }
+
+    @keyframes scanMove {
+      0% {
+        top: 18%;
+      }
+      50% {
+        top: 78%;
+      }
+      100% {
+        top: 18%;
+      }
+    }
+
     #status {
       margin-top: 16px;
-      font-size: 17px;
+      font-size: 16px;
+      font-weight: 700;
       min-height: 24px;
-      font-weight: 600;
     }
 
     .ok {
       color: var(--success);
-      font-weight: bold;
     }
 
     .err {
       color: var(--danger);
-      font-weight: bold;
     }
 
     .hint {
@@ -104,7 +202,7 @@
     }
 
     .btn-primary {
-      background: #2563eb;
+      background: var(--accent);
       color: white;
     }
 
@@ -117,7 +215,7 @@
       display: none !important;
     }
 
-    /* Прячем стандартный лишний UI html5-qrcode */
+    /* убираем лишний UI html5-qrcode */
     #reader__dashboard_section_csr,
     #reader__dashboard_section_swaplink,
     #reader__scan_region img,
@@ -147,6 +245,15 @@
 
   <div class="card">
     <div id="reader"></div>
+
+    <div class="scan-overlay">
+      <div id="scanFrame" class="scan-frame"></div>
+      <div class="scan-corner tl"></div>
+      <div class="scan-corner tr"></div>
+      <div class="scan-corner bl"></div>
+      <div class="scan-corner br"></div>
+      <div id="scanLine" class="scan-line"></div>
+    </div>
   </div>
 
   <div id="status">Запускаємо камеру...</div>
@@ -168,11 +275,14 @@
     const hintEl = document.getElementById("hint");
     const retryBtn = document.getElementById("retryBtn");
     const closeBtn = document.getElementById("closeBtn");
+    const scanFrameEl = document.getElementById("scanFrame");
+    const scanLineEl = document.getElementById("scanLine");
 
     let qrScanner = null;
     let scannerStarted = false;
     let alreadyScanned = false;
     let isSending = false;
+    let audioContext = null;
 
     function setStatus(text, className = "") {
       statusEl.textContent = text;
@@ -185,6 +295,16 @@
 
     function hideRecoveryButtons() {
       retryBtn.classList.add("hidden");
+    }
+
+    function setScanSuccessUI() {
+      scanFrameEl.classList.add("success");
+      scanLineEl.classList.add("hidden");
+    }
+
+    function resetScanUI() {
+      scanFrameEl.classList.remove("success");
+      scanLineEl.classList.remove("hidden");
     }
 
     async function stopScanner() {
@@ -202,11 +322,47 @@
     }
 
     function qrboxSize(viewfinderWidth, viewfinderHeight) {
-      const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.75;
+      const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.72;
       return {
         width: Math.floor(size),
         height: Math.floor(size)
       };
+    }
+
+    function vibrateSuccess() {
+      if (navigator.vibrate) {
+        navigator.vibrate(120);
+      }
+    }
+
+    function playBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        if (!audioContext) {
+          audioContext = new AudioCtx();
+        }
+
+        const duration = 0.12;
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(1120, audioContext.currentTime);
+
+        gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+      } catch (e) {
+        console.warn("Beep error:", e);
+      }
     }
 
     async function sendResultToBot(decodedText) {
@@ -222,21 +378,27 @@
       }
 
       try {
-        setStatus("✅ QR успішно зчитано. Відправляємо в бота...", "ok");
+        setScanSuccessUI();
+        vibrateSuccess();
+        playBeep();
+
+        setStatus("✅ Успішно! Відправляємо...", "ok");
         hintEl.textContent = "Дані передаються у Telegram...";
+
         await stopScanner();
 
         tg.sendData(decodedText);
 
         setTimeout(() => {
           tg.close();
-        }, 250);
+        }, 350);
       } catch (e) {
         console.error("sendResultToBot error:", e);
         setStatus("❌ Помилка відправки даних у Telegram", "err");
         hintEl.textContent = "Спробуй ще раз";
         alreadyScanned = false;
         isSending = false;
+        resetScanUI();
         showRecoveryButtons();
       }
     }
@@ -248,13 +410,15 @@
     }
 
     function onScanFailure(_) {
-      // нічого не робимо, щоб не спамити помилками
+      // ничего не делаем, чтобы не спамить ошибками
     }
 
     async function startScanner() {
       hideRecoveryButtons();
       alreadyScanned = false;
       isSending = false;
+      resetScanUI();
+
       setStatus("Запускаємо камеру...");
       hintEl.textContent = "Після успішного сканування дані автоматично підуть у бота";
 
@@ -298,8 +462,8 @@
       } catch (error) {
         console.error("Camera start failed:", error);
         setStatus("❌ Не вдалося відкрити камеру", "err");
-        hintEl.textContent =
-          "Дозволь доступ до камери та спробуй ще раз.";
+        hintEl.textContent = "Дозволь доступ до камери та спробуй ще раз.";
+        resetScanUI();
         showRecoveryButtons();
       }
     }
